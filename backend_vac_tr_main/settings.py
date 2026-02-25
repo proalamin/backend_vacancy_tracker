@@ -27,9 +27,11 @@ def _normalize_host(host_value):
     host = (host_value or '').strip()
     if not host:
         return ''
+    host = host.strip("'\"")
     if '://' in host:
         host = urlsplit(host).hostname or ''
     host = host.split('/')[0]
+    host = host.split(':')[0]
     # Django wildcard format is ".example.com", not "*.example.com".
     if host.startswith('*.'):
         host = f".{host[2:]}"
@@ -42,6 +44,10 @@ ALLOWED_HOSTS = [host for host in ALLOWED_HOSTS if host]
 render_external_hostname = _normalize_host(os.getenv('RENDER_EXTERNAL_HOSTNAME', ''))
 if render_external_hostname and render_external_hostname not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(render_external_hostname)
+
+# Safety fallback for Render deployments with misconfigured ALLOWED_HOSTS env values.
+if '.onrender.com' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append('.onrender.com')
 
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
