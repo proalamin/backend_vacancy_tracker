@@ -2,13 +2,11 @@
 
 from pathlib import Path
 import os
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from decouple import config, Csv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-
-DEBUG = True
 
 
 # Quick-start development settings - unsuitable for production
@@ -18,7 +16,16 @@ DEBUG = True
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-niqc)ib^4f2j-0f24u84#g2^2@mmc6+^5q4sfqs_0_aq*5tdy$')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = config('DEBUG', default=True, cast=bool)
+def _safe_bool(raw_value, default=True):
+    value = (str(raw_value) if raw_value is not None else '').strip().lower()
+    if value in {'1', 'true', 't', 'yes', 'y', 'on'}:
+        return True
+    if value in {'0', 'false', 'f', 'no', 'n', 'off'}:
+        return False
+    return default
+
+
+DEBUG = _safe_bool(config('DEBUG', default='True'), default=True)
 
 import dj_database_url
 
@@ -42,14 +49,6 @@ def _normalize_host(host_value):
 
 ALLOWED_HOSTS = [_normalize_host(host) for host in raw_allowed_hosts]
 ALLOWED_HOSTS = [host for host in ALLOWED_HOSTS if host]
-
-render_external_hostname = _normalize_host(os.getenv('RENDER_EXTERNAL_HOSTNAME', ''))
-if render_external_hostname and render_external_hostname not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS.append(render_external_hostname)
-
-# Safety fallback for Render deployments with misconfigured ALLOWED_HOSTS env values.
-if '.onrender.com' not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS.append('.onrender.com')
 
 # Safety fallback for PythonAnywhere deployments.
 if '.pythonanywhere.com' not in ALLOWED_HOSTS:
@@ -138,11 +137,19 @@ WSGI_APPLICATION = 'backend_vac_tr_main.wsgi.application'
 
 
 
-# default database
+def _sanitize_database_url(url):
+    """Remove non-PostgreSQL query params that break psycopg2."""
+    parsed = urlsplit(url)
+    query_pairs = parse_qsl(parsed.query, keep_blank_values=True)
+    cleaned_pairs = [(k, v) for k, v in query_pairs if k != 'directConnection']
+    cleaned_query = urlencode(cleaned_pairs)
+    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, cleaned_query, parsed.fragment))
+
+
+database_url = config('DATABASE_URL', default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}")
+database_url = _sanitize_database_url(database_url)
 DATABASES = {
-    'default': dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}"
-    )
+    'default': dj_database_url.parse(database_url, conn_max_age=600)
 }
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators

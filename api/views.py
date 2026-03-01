@@ -21,6 +21,7 @@ def JobsView(request):
 def jobDetailsView(request, pk):
     try:
         job= Job.objects.get(pk=pk)
+        
     except Job.DoesNotExist:
         return Response(status=status.HTTP_404_NOT_FOUND)
     
