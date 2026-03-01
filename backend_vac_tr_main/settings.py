@@ -49,6 +49,28 @@ if render_external_hostname and render_external_hostname not in ALLOWED_HOSTS:
 if '.onrender.com' not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append('.onrender.com')
 
+# Safety fallback for PythonAnywhere deployments.
+if '.pythonanywhere.com' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append('.pythonanywhere.com')
+
+
+def _normalize_origin(origin_value):
+    origin = (origin_value or '').strip()
+    if not origin:
+        return ''
+    origin = origin.strip("'\"")
+    if '://' not in origin:
+        origin = f"https://{origin}"
+    parsed = urlsplit(origin)
+    if not parsed.scheme or not parsed.hostname:
+        return ''
+    return f"{parsed.scheme}://{parsed.hostname}"
+
+
+raw_csrf_trusted_origins = config('CSRF_TRUSTED_ORIGINS', default='', cast=Csv())
+CSRF_TRUSTED_ORIGINS = [_normalize_origin(origin) for origin in raw_csrf_trusted_origins]
+CSRF_TRUSTED_ORIGINS = [origin for origin in CSRF_TRUSTED_ORIGINS if origin]
+
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 
@@ -159,6 +181,8 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Security settings for production
 if not DEBUG:
+    # PythonAnywhere (and other reverse proxies) forward protocol via this header.
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
