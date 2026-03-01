@@ -1,81 +1,31 @@
 
-
 from pathlib import Path
-import os
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
-from decouple import config, Csv
+from decouple import Csv, config
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+SECRET_KEY = config(
+    'SECRET_KEY',
+    default='django-insecure-niqc)ib^4f2j-0f24u84#g2^2@mmc6+^5q4sfqs_0_aq*5tdy$',
+)
+DEBUG = str(config('DEBUG', default='True')).strip().lower() in {
+    '1', 'true', 't', 'yes', 'y', 'on'
+}
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = config('SECRET_KEY', default='django-insecure-niqc)ib^4f2j-0f24u84#g2^2@mmc6+^5q4sfqs_0_aq*5tdy$')
-
-# SECURITY WARNING: don't run with debug turned on in production!
-def _safe_bool(raw_value, default=True):
-    value = (str(raw_value) if raw_value is not None else '').strip().lower()
-    if value in {'1', 'true', 't', 'yes', 'y', 'on'}:
-        return True
-    if value in {'0', 'false', 'f', 'no', 'n', 'off'}:
-        return False
-    return default
-
-
-DEBUG = _safe_bool(config('DEBUG', default='True'), default=True)
-
-import dj_database_url
-
-raw_allowed_hosts = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
-
-
-def _normalize_host(host_value):
-    host = (host_value or '').strip()
-    if not host:
-        return ''
-    host = host.strip("'\"")
-    if '://' in host:
-        host = urlsplit(host).hostname or ''
-    host = host.split('/')[0]
-    host = host.split(':')[0]
-    # Django wildcard format is ".example.com", not "*.example.com".
-    if host.startswith('*.'):
-        host = f".{host[2:]}"
-    return host.strip()
-
-
-ALLOWED_HOSTS = [_normalize_host(host) for host in raw_allowed_hosts]
-ALLOWED_HOSTS = [host for host in ALLOWED_HOSTS if host]
-
-# Safety fallback for PythonAnywhere deployments.
-if '.pythonanywhere.com' not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS.append('.pythonanywhere.com')
-
-
-def _normalize_origin(origin_value):
-    origin = (origin_value or '').strip()
-    if not origin:
-        return ''
-    origin = origin.strip("'\"")
-    if '://' not in origin:
-        origin = f"https://{origin}"
-    parsed = urlsplit(origin)
-    if not parsed.scheme or not parsed.hostname:
-        return ''
-    return f"{parsed.scheme}://{parsed.hostname}"
-
-
-raw_csrf_trusted_origins = config('CSRF_TRUSTED_ORIGINS', default='', cast=Csv())
-CSRF_TRUSTED_ORIGINS = [_normalize_origin(origin) for origin in raw_csrf_trusted_origins]
-CSRF_TRUSTED_ORIGINS = [origin for origin in CSRF_TRUSTED_ORIGINS if origin]
-
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-
-
-# Application definition
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in config('ALLOWED_HOSTS', default='127.0.0.1,localhost', cast=Csv())
+    if host.strip()
+]
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in config(
+        'CSRF_TRUSTED_ORIGINS',
+        default='http://127.0.0.1:8000,http://localhost:8000',
+        cast=Csv(),
+    )
+    if origin.strip()
+]
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -88,7 +38,6 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'api',
     'jobs',
-
 ]
 
 REST_FRAMEWORK = {
@@ -131,28 +80,12 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'backend_vac_tr_main.wsgi.application'
 
-
-# Database
-# https://docs.djangoproject.com/en/6.0/ref/settings/#databases
-
-
-
-def _sanitize_database_url(url):
-    """Remove non-PostgreSQL query params that break psycopg2."""
-    parsed = urlsplit(url)
-    query_pairs = parse_qsl(parsed.query, keep_blank_values=True)
-    cleaned_pairs = [(k, v) for k, v in query_pairs if k != 'directConnection']
-    cleaned_query = urlencode(cleaned_pairs)
-    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, cleaned_query, parsed.fragment))
-
-
-database_url = config('DATABASE_URL', default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}")
-database_url = _sanitize_database_url(database_url)
 DATABASES = {
-    'default': dj_database_url.parse(database_url, conn_max_age=600)
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+    }
 }
-# Password validation
-# https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -169,35 +102,16 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
-# Internationalization
-# https://docs.djangoproject.com/en/6.0/topics/i18n/
-
 LANGUAGE_CODE = 'en-us'
-
 TIME_ZONE = 'UTC'
-
 USE_I18N = True
-
 USE_TZ = True
 
-
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/6.0/howto/static-files/
-
 STATIC_URL = 'static/'
-
-# WhiteNoise configuration for static files
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# Security settings for production
 if not DEBUG:
-    # PythonAnywhere (and other reverse proxies) forward protocol via this header.
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-    SECURE_BROWSER_XSS_FILTER = True
-    SECURE_CONTENT_SECURITY_POLICY = {
-        'default-src': ("'self'",),
-    }
